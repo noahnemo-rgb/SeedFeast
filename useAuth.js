@@ -1,81 +1,67 @@
-import { router } from 'expo-router';
-import * as SecureStore from 'expo-secure-store';
-import { useCallback, useEffect, useMemo } from 'react';
-import { create } from 'zustand';
-import { Modal, View } from 'react-native';
-import { useAuthModal, useAuthStore, authKey, secureStoreOptions } from './store';
+import { useCallback } from 'react';
+import { signIn, signOut } from "@auth/create/react";
 
+function isDevIframe() {
+  try {
+    return typeof window !== 'undefined' && window.self !== window.top;
+  } catch { return true; }
+}
 
-/**
- * This hook provides authentication functionality.
- * It may be easier to use the `useAuthModal` or `useRequireAuth` hooks
- * instead as those will also handle showing authentication to the user
- * directly.
- */
-export const useAuth = () => {
-  const { isReady, auth, setAuth } = useAuthStore();
-  const { isOpen, close, open } = useAuthModal();
+function devSocialShim(provider, callbackUrl) {
+  const params = new URLSearchParams({ provider });
+  if (callbackUrl) params.set('callbackUrl', callbackUrl);
+  window.location.href = '/__create/social-dev-shim?' + params;
+}
 
-  const initiate = useCallback(() => {
-    // The auth state machine must always reach a terminal state. SecureStore
-    // can throw or hang in TestFlight release builds (Keychain access denied,
-    // missing keychain-access-groups entitlement after EAS migration, locked
-    // device first-unlock state, or iOS 26 TurboModule rethrow). Without a
-    // catch the unhandled rejection leaves isReady=false forever and the
-    // RootLayout renders null — the user sees a blank screen indefinitely.
-    Promise.race([
-      SecureStore.getItemAsync(authKey, secureStoreOptions),
-      new Promise((resolve) => setTimeout(() => resolve(null), 3000)),
-    ])
-      .then((stored) => {
-        useAuthStore.setState({
-          auth: stored ? JSON.parse(stored) : null,
-          isReady: true,
-        });
-      })
-      .catch(() => {
-        useAuthStore.setState({ auth: null, isReady: true });
-      });
+function useAuth() {
+  const callbackUrl = typeof window !== 'undefined'
+    ? new URLSearchParams(window.location.search).get('callbackUrl')
+    : null;
+
+  const signInWithCredentials = useCallback((options) => {
+    return signIn("credentials-signin", {
+      ...options,
+      callbackUrl: callbackUrl ?? options.callbackUrl
+    });
+  }, [callbackUrl])
+
+  const signUpWithCredentials = useCallback((options) => {
+    return signIn("credentials-signup", {
+      ...options,
+      callbackUrl: callbackUrl ?? options.callbackUrl
+    });
+  }, [callbackUrl])
+
+  const signInWithGoogle = useCallback((options) => {
+    const cb = callbackUrl ?? options?.callbackUrl;
+    if (isDevIframe()) return devSocialShim("google", cb);
+    return signIn("google", { ...options, callbackUrl: cb });
+  }, [callbackUrl]);
+  const signInWithFacebook = useCallback((options) => {
+    const cb = options?.callbackUrl;
+    if (isDevIframe()) return devSocialShim("facebook", cb);
+    return signIn("facebook", options);
   }, []);
-
-  useEffect(() => {}, []);
-
-  const signIn = useCallback(() => {
-    open({ mode: 'signin' });
-  }, [open]);
-  const signUp = useCallback(() => {
-    open({ mode: 'signup' });
-  }, [open]);
-
-  const signOut = useCallback(() => {
-    setAuth(null);
-    close();
-  }, [close]);
+  const signInWithTwitter = useCallback((options) => {
+    const cb = options?.callbackUrl;
+    if (isDevIframe()) return devSocialShim("twitter", cb);
+    return signIn("twitter", options);
+  }, []);
+  const signInWithApple = useCallback((options) => {
+    const cb = callbackUrl ?? options?.callbackUrl;
+    if (isDevIframe()) return devSocialShim("apple", cb);
+    return signIn("apple", { ...options, callbackUrl: cb });
+  }, [callbackUrl]);
 
   return {
-    isReady,
-    isAuthenticated: isReady ? !!auth : null,
-    signIn,
+    signInWithCredentials,
+    signUpWithCredentials,
+    signInWithGoogle,
+    signInWithFacebook,
+    signInWithTwitter,
+    signInWithApple,
     signOut,
-    signUp,
-    auth,
-    setAuth,
-    initiate,
-  };
-};
-
-/**
- * This hook will automatically open the authentication modal if the user is not authenticated.
- */
-export const useRequireAuth = (options) => {
-  const { isAuthenticated, isReady } = useAuth();
-  const { open } = useAuthModal();
-
-  useEffect(() => {
-    if (!isAuthenticated && isReady) {
-      open({ mode: options?.mode });
-    }
-  }, [isAuthenticated, open, options?.mode, isReady]);
-};
+  }
+}
 
 export default useAuth;
