@@ -1,0 +1,290 @@
+import React from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  ActivityIndicator,
+} from "react-native";
+import { Image } from "expo-image";
+import { StatusBar } from "expo-status-bar";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
+import { Heart, Search } from "lucide-react-native";
+import { useQuery } from "@tanstack/react-query";
+import {
+  useFonts,
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
+} from "@expo-google-fonts/inter";
+import { Poppins_600SemiBold } from "@expo-google-fonts/poppins";
+import { useAuth } from "@/utils/auth/useAuth";
+
+export default function BookmarksScreen() {
+  const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const { isAuthenticated, isReady } = useAuth();
+
+  const [fontsLoaded] = useFonts({
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Poppins_600SemiBold,
+  });
+
+  const { data: favorites, isLoading } = useQuery({
+    queryKey: ["favorites"],
+    queryFn: async () => {
+      const response = await fetch("/api/recipes/favorites");
+      if (!response.ok) throw new Error("Failed to fetch favorites");
+      return response.json();
+    },
+    enabled: isAuthenticated,
+  });
+
+  if (!fontsLoaded) {
+    return null;
+  }
+
+  if (!isReady) {
+    return (
+      <View style={[styles.container, { paddingTop: insets.top }]}>
+        <ActivityIndicator size="large" color="#FF6A3D" />
+      </View>
+    );
+  }
+
+  const RecipeCard = ({ recipe }) => (
+    <TouchableOpacity
+      style={styles.recipeCard}
+      onPress={() => router.push(`/recipe/${recipe.id}`)}
+    >
+      <Image source={{ uri: recipe.image }} style={styles.recipeCardImage} />
+      <View style={styles.recipeCardContent}>
+        <Text style={styles.recipeCardTitle} numberOfLines={2}>
+          {recipe.title}
+        </Text>
+        <Text style={styles.recipeCardChef} numberOfLines={1}>
+          By {recipe.chef_name}
+        </Text>
+        <View style={styles.recipeCardMeta}>
+          <Text style={styles.recipeCardMetaText}>{recipe.time}</Text>
+          <Text style={styles.recipeCardMetaText}>{recipe.difficulty}</Text>
+        </View>
+      </View>
+      <View style={styles.favoriteIcon}>
+        <Heart size={12} color="#FFFFFF" fill="#FFFFFF" strokeWidth={2} />
+      </View>
+    </TouchableOpacity>
+  );
+
+  return (
+    <View style={[styles.container, { paddingTop: insets.top }]}>
+      <StatusBar style="dark" />
+
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Bookmarks</Text>
+      </View>
+
+      {!isAuthenticated ? (
+        <View style={styles.emptyState}>
+          <View style={styles.emptyIconContainer}>
+            <Heart size={48} color="#8C8C8C" strokeWidth={1.5} />
+          </View>
+          <Text style={styles.emptyTitle}>Sign In to Save Recipes</Text>
+          <Text style={styles.emptySubtitle}>
+            Keep track of your favorite recipes{"\n"}
+            by signing in to your account
+          </Text>
+          <TouchableOpacity
+            style={styles.signInButton}
+            onPress={() => router.push("/(tabs)/profile")}
+          >
+            <Text style={styles.signInButtonText}>Go to Profile</Text>
+          </TouchableOpacity>
+        </View>
+      ) : isLoading ? (
+        <View style={styles.emptyState}>
+          <ActivityIndicator size="large" color="#FF6A3D" />
+        </View>
+      ) : !favorites || favorites.length === 0 ? (
+        <View style={styles.emptyState}>
+          <View style={styles.emptyIconContainer}>
+            <Heart size={48} color="#8C8C8C" strokeWidth={1.5} />
+          </View>
+          <Text style={styles.emptyTitle}>No Bookmarks Yet</Text>
+          <Text style={styles.emptySubtitle}>
+            Recipes you favorite will appear here{"\n"}
+            for quick access later
+          </Text>
+          <TouchableOpacity
+            style={styles.exploreButton}
+            onPress={() => router.push("/(tabs)/search")}
+          >
+            <Search size={18} color="#FFFFFF" strokeWidth={2} />
+            <Text style={styles.exploreButtonText}>Explore Recipes</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <ScrollView
+          style={styles.content}
+          contentContainerStyle={[
+            styles.contentContainer,
+            { paddingBottom: insets.bottom + 20 },
+          ]}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.resultsGrid}>
+            {favorites.map((recipe) => (
+              <RecipeCard key={recipe.id} recipe={recipe} />
+            ))}
+          </View>
+        </ScrollView>
+      )}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#F8F8F8",
+  },
+  header: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    backgroundColor: "#FFFFFF",
+    borderBottomWidth: 1,
+    borderBottomColor: "#F3F4F6",
+  },
+  headerTitle: {
+    fontFamily: "Poppins_600SemiBold",
+    fontSize: 24,
+    color: "#111111",
+  },
+  content: {
+    flex: 1,
+  },
+  contentContainer: {
+    padding: 20,
+  },
+  resultsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+  },
+  recipeCard: {
+    width: "48%",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    marginBottom: 16,
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  recipeCardImage: {
+    width: "100%",
+    height: 120,
+  },
+  recipeCardContent: {
+    padding: 12,
+  },
+  recipeCardTitle: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 14,
+    color: "#111111",
+    marginBottom: 4,
+    height: 40,
+  },
+  recipeCardChef: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 12,
+    color: "#8C8C8C",
+    marginBottom: 8,
+  },
+  recipeCardMeta: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  recipeCardMetaText: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 11,
+    color: "#FF6A3D",
+  },
+  favoriteIcon: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: "rgba(0,0,0,0.3)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  emptyState: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 40,
+  },
+  emptyIconContainer: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 24,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  emptyTitle: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 20,
+    color: "#111111",
+    marginBottom: 12,
+    textAlign: "center",
+  },
+  emptySubtitle: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 15,
+    color: "#6B7280",
+    textAlign: "center",
+    lineHeight: 22,
+    marginBottom: 32,
+  },
+  signInButton: {
+    backgroundColor: "#FF6A3D",
+    paddingHorizontal: 32,
+    paddingVertical: 14,
+    borderRadius: 24,
+  },
+  signInButtonText: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 16,
+    color: "#FFFFFF",
+  },
+  exploreButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FF6A3D",
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 24,
+    gap: 8,
+  },
+  exploreButtonText: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 16,
+    color: "#FFFFFF",
+  },
+});
